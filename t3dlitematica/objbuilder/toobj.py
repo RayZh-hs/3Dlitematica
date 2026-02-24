@@ -7,8 +7,9 @@ from typing import List
 import tempfile
 import shutil
 from pathlib import Path
+from alive_progress import alive_bar
 
-def LitimaticaToObj(litematica: dict, TextureFolder: str, output: str = "./") -> None:
+def LitimaticaToObj(litematica: dict, TextureFolder: str, output: str = "./", show_progress: bool = False) -> None:
     size = (
         int(litematica["Metadata"]["EnclosingSize"]["x"]),
         int(litematica["Metadata"]["EnclosingSize"]["y"]),
@@ -17,10 +18,10 @@ def LitimaticaToObj(litematica: dict, TextureFolder: str, output: str = "./") ->
     regonname = list(litematica["Regions"].keys())[0]
     name = litematica["Metadata"]["Name"]
     litematica = litematica["Regions"][regonname]["decode_BlockStates"]
-    return Objhandel(name, litematica, size, TextureFolder, output)
+    return Objhandel(name, litematica, size, TextureFolder, output, show_progress=show_progress)
 
 class Objhandel:
-    def __init__(self, name:str, data:List[dict], size:tuple[int,int,int],TextureFolder:str,outputfolder:str,show_error_block:bool=False) -> None:
+    def __init__(self, name:str, data:List[dict], size:tuple[int,int,int],TextureFolder:str,outputfolder:str,show_error_block:bool=False, show_progress:bool=False) -> None:
         self.name = name
         self.tempfolder = tempfile.mkdtemp()
         self.objfile = open(os.path.join(self.tempfolder, self.name + ".obj"), "w")
@@ -30,6 +31,7 @@ class Objhandel:
         self.vtovt = {}
         self.textures = []
         self.show_error_block = show_error_block
+        self.show_progress = show_progress
         self.TextureFolder = TextureFolder
         self.outputfolder = outputfolder
         self.main(data, size)
@@ -44,34 +46,62 @@ class Objhandel:
         x = size[0]
         y = size[1]
         z = size[2]
+        total_blocks = x * y * z
         count = 0
-        for j in range(1, y + 1):
-            for k in range(1, z + 1):
-                for i in range(1, x + 1):
-                    if data[count]["Name"] == "minecraft:air":
-                        pass
-                    else:
-                        try:
-                            self.addEnity(Enity(i / 10, j / 10, k / 10, data[count], self.TextureFolder))
-                        except Exception as e:
-                            error_class = e.__class__.__name__
-                            detail = e.args[0]
-                            cl, exc, tb = sys.exc_info()
-                            lastCallStack = traceback.extract_tb(tb)[-1]
-                            fileName = lastCallStack[0]
-                            lineNum = lastCallStack[1]
-                            funcName = lastCallStack[2]
-                            errMsg = 'File "{}", line {}, in {}: [{}] {}'.format(
-                                fileName, lineNum, funcName, error_class, detail
-                            )
-                            print(f"[UserData] | {errMsg}")
-                            if self.show_error_block:
-                                self.addblock(i / 10, j / 10, k / 10, data[count]["Name"])
-                            else:
+        if self.show_progress:
+            with alive_bar(total_blocks, title="Building blocks") as bar:
+                for j in range(1, y + 1):
+                    for k in range(1, z + 1):
+                        for i in range(1, x + 1):
+                            if data[count]["Name"] == "minecraft:air":
                                 pass
-                    count += 1
+                            else:
+                                try:
+                                    self.addEnity(Enity(i / 10, j / 10, k / 10, data[count], self.TextureFolder))
+                                except Exception as e:
+                                    error_class = e.__class__.__name__
+                                    detail = e.args[0]
+                                    cl, exc, tb = sys.exc_info()
+                                    lastCallStack = traceback.extract_tb(tb)[-1]
+                                    fileName = lastCallStack[0]
+                                    lineNum = lastCallStack[1]
+                                    funcName = lastCallStack[2]
+                                    errMsg = 'File "{}", line {}, in {}: [{}] {}'.format(
+                                        fileName, lineNum, funcName, error_class, detail
+                                    )
+                                    print(f"[UserData] | {errMsg}")
+                                    if self.show_error_block:
+                                        self.addblock(i / 10, j / 10, k / 10, data[count]["Name"])
+                                    else:
+                                        pass
+                            count += 1
+                            bar()
+        else:
+            for j in range(1, y + 1):
+                for k in range(1, z + 1):
+                    for i in range(1, x + 1):
+                        if data[count]["Name"] == "minecraft:air":
+                            pass
+                        else:
+                            try:
+                                self.addEnity(Enity(i / 10, j / 10, k / 10, data[count], self.TextureFolder))
+                            except Exception as e:
+                                error_class = e.__class__.__name__
+                                detail = e.args[0]
+                                cl, exc, tb = sys.exc_info()
+                                lastCallStack = traceback.extract_tb(tb)[-1]
+                                fileName = lastCallStack[0]
+                                lineNum = lastCallStack[1]
+                                funcName = lastCallStack[2]
+                                errMsg = 'File "{}", line {}, in {}: [{}] {}'.format(
+                                    fileName, lineNum, funcName, error_class, detail
+                                )
+                                if self.show_error_block:
+                                    self.addblock(i / 10, j / 10, k / 10, data[count]["Name"])
+                                else:
+                                    pass
+                        count += 1
 
-        # self.objfile.write(self.output)
         self.writeobj()
         self.objfile.close()
 
@@ -162,7 +192,7 @@ class Objhandel:
             f.write(temp)
 
         oneblock = ""
-        for blocks in self.tmpdata:
+        for blocks in tqdm(self.tmpdata, desc="Writing OBJ", unit="block", disable=not self.show_progress):
             for v in self.tmpdata[blocks]["v"]:
                 if self.vtof.get((v[0], v[1], v[2])) == None:
                     oneblock += "v " + str(v[0]) + " " + str(v[1]) + " " + str(v[2]) + "\n"

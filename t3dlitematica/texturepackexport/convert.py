@@ -2,10 +2,11 @@ import json
 import os
 import shutil
 from pathlib import Path
+from alive_progress import alive_bar
 
 class convert_texturepack:
 
-    def __init__(self, path: str | Path , output: str):
+    def __init__(self, path: str | Path , output: str, show_progress: bool = False):
         if not isinstance(path, Path):
             path = Path(path)
         self.path = path
@@ -26,6 +27,7 @@ class convert_texturepack:
         os.makedirs(self.output, exist_ok=True)
         self.noneedfind = ["armor_trims","mob_effects","shield_patterns","particles"]
         self.blocksdata = {"models":{}}
+        self.show_progress = show_progress
         self.start()
         if self.tempfolder:
             shutil.rmtree(self.tempfolder)
@@ -71,30 +73,60 @@ class convert_texturepack:
                     blockmodel["elements"][0]["faces"]["west"]["uv"] = [0, 0, 16, 8]
                 self.blocksdata["models"][path.split("/")[-1].split(".")[0]] = blockmodel
 
-        for i in os.listdir(os.path.join(self.mainpath, "blockstates")):
-            blockstate_file = os.path.join(self.mainpath, "blockstates", i)
-            if not os.path.exists(blockstate_file):
-                continue
-            with open(blockstate_file, "r", encoding="utf8") as f:
-                blockstates = json.load(f)
-            if "variants" in blockstates:
-                for variants in blockstates["variants"]:
-                    if isinstance(blockstates["variants"][variants] , dict):
-                        load_model(blockstates["variants"][variants]["model"].split(":")[-1]+".json")
-                        blockstates["variants"][variants]["model"] = blockstates["variants"][variants]["model"].split("/")[-1]
-                    elif isinstance(blockstates["variants"][variants] , list):
-                        for j in blockstates["variants"][variants]:
-                            load_model(j["model"].split(":")[-1]+".json")
-                            j["model"] = j["model"].split("/")[-1]
-            if "multipart" in blockstates:
-                for multipart in blockstates["multipart"]:
-                    if isinstance(multipart["apply"], dict):
-                        load_model(multipart["apply"]["model"].split(":")[-1]+".json")
-                        multipart["apply"]["model"] = multipart["apply"]["model"].split("/")[-1]
-                    elif isinstance(multipart["apply"], list):
-                        for j in multipart["apply"]:
-                            load_model(j["model"].split(":")[-1]+".json")
-                            j["model"] = j["model"].split("/")[-1]
+        blockstate_files = os.listdir(os.path.join(self.mainpath, "blockstates"))
+        if self.show_progress:
+            with alive_bar(len(blockstate_files), title="Processing blockstates") as bar:
+                for i in blockstate_files:
+                    blockstate_file = os.path.join(self.mainpath, "blockstates", i)
+                    if not os.path.exists(blockstate_file):
+                        bar()
+                        continue
+                    with open(blockstate_file, "r", encoding="utf8") as f:
+                        blockstates = json.load(f)
+                    if "variants" in blockstates:
+                        for variants in blockstates["variants"]:
+                            if isinstance(blockstates["variants"][variants] , dict):
+                                load_model(blockstates["variants"][variants]["model"].split(":")[-1]+".json")
+                                blockstates["variants"][variants]["model"] = blockstates["variants"][variants]["model"].split("/")[-1]
+                            elif isinstance(blockstates["variants"][variants] , list):
+                                for j in blockstates["variants"][variants]:
+                                    load_model(j["model"].split(":")[-1]+".json")
+                                    j["model"] = j["model"].split("/")[-1]
+                    if "multipart" in blockstates:
+                        for multipart in blockstates["multipart"]:
+                            if isinstance(multipart["apply"], dict):
+                                load_model(multipart["apply"]["model"].split(":")[-1]+".json")
+                                multipart["apply"]["model"] = multipart["apply"]["model"].split("/")[-1]
+                            elif isinstance(multipart["apply"], list):
+                                for j in multipart["apply"]:
+                                    load_model(j["model"].split(":")[-1]+".json")
+                                    j["model"] = j["model"].split("/")[-1]
+                    bar()
+        else:
+            for i in blockstate_files:
+                blockstate_file = os.path.join(self.mainpath, "blockstates", i)
+                if not os.path.exists(blockstate_file):
+                    continue
+                with open(blockstate_file, "r", encoding="utf8") as f:
+                    blockstates = json.load(f)
+                if "variants" in blockstates:
+                    for variants in blockstates["variants"]:
+                        if isinstance(blockstates["variants"][variants] , dict):
+                            load_model(blockstates["variants"][variants]["model"].split(":")[-1]+".json")
+                            blockstates["variants"][variants]["model"] = blockstates["variants"][variants]["model"].split("/")[-1]
+                        elif isinstance(blockstates["variants"][variants] , list):
+                            for j in blockstates["variants"][variants]:
+                                load_model(j["model"].split(":")[-1]+".json")
+                                j["model"] = j["model"].split("/")[-1]
+                if "multipart" in blockstates:
+                    for multipart in blockstates["multipart"]:
+                        if isinstance(multipart["apply"], dict):
+                            load_model(multipart["apply"]["model"].split(":")[-1]+".json")
+                            multipart["apply"]["model"] = multipart["apply"]["model"].split("/")[-1]
+                        elif isinstance(multipart["apply"], list):
+                            for j in multipart["apply"]:
+                                load_model(j["model"].split(":")[-1]+".json")
+                                j["model"] = j["model"].split("/")[-1]
 
             self.blocksdata[i.split(".")[0]] = blockstates
 

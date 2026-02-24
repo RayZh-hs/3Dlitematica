@@ -1,1 +1,1 @@
-alive_progress
+alive-progress

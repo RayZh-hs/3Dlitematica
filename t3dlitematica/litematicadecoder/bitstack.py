@@ -1,12 +1,15 @@
 from typing import List, Any
+from alive_progress import alive_bar
+
 class bitstack:
-    def __init__(self, bytelong:int, Resolve_data: List[Any]) -> None:
+    def __init__(self, bytelong:int, Resolve_data: List[Any], show_progress: bool = False) -> None:
         self.bites = ""
         long = 1
         while bytelong > 2**long:
             long += 1
         self.bytelong = long
         self.Resolve_data = Resolve_data
+        self.show_progress = show_progress
 
     def add(self, bite: int) -> None:
         bite = int(bite)
@@ -28,6 +31,12 @@ class bitstack:
         stepbytes = stepbytes[::-1]
         stepbytes = [int(i, 2) for i in stepbytes]  # 二進位轉十進位
         decode_BlockStates = []
-        for z in stepbytes:
-            decode_BlockStates.append(self.Resolve_data[z])
+        if self.show_progress:
+            with alive_bar(len(stepbytes), title="Decoding blocks") as bar:
+                for z in stepbytes:
+                    decode_BlockStates.append(self.Resolve_data[z])
+                    bar()
+        else:
+            for z in stepbytes:
+                decode_BlockStates.append(self.Resolve_data[z])
         return decode_BlockStates

@@ -9,8 +9,6 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from alive_progress import alive_bar
-
 from . import __version__
 from .litematicadecoder import Resolve
 from .objbuilder import LitimaticaToObj
@@ -97,48 +95,47 @@ def cmd_texture(args: argparse.Namespace) -> None:
         print(f"Output: {output_path}")
 
     # Process texture packs
-    with alive_bar(bar="bubbles", spinner="wait", disable=not args.verbose) as bar:
-        try:
-            temp_dir = output_path.parent / "temp_textures"
+    try:
+        temp_dir = output_path.parent / "temp_textures"
 
-            def load_texture_data(input_file: Path) -> dict:
-                """Load texture data from a .json or .zip file."""
-                if input_file.suffix == ".zip":
-                    convert_texturepack(input_file, temp_dir)
-                    with open(temp_dir / "output.json", "r", encoding="utf8") as f:
-                        return json.load(f)
+        def load_texture_data(input_file: Path) -> dict:
+            """Load texture data from a .json or .zip file."""
+            if input_file.suffix == ".zip":
+                convert_texturepack(input_file, temp_dir, show_progress=True)
+                with open(temp_dir / "output.json", "r", encoding="utf8") as f:
+                    return json.load(f)
+            else:
+                with open(input_file, "r", encoding="utf8") as f:
+                    return json.load(f)
+
+        def merge_texture_data(base: dict, override: dict) -> dict:
+            """Deep-merge two texture data dicts. Keys in override take precedence."""
+            merged = dict(base)
+            for key, value in override.items():
+                if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+                    merged[key] = {**merged[key], **value}
                 else:
-                    with open(input_file, "r", encoding="utf8") as f:
-                        return json.load(f)
+                    merged[key] = value
+            return merged
 
-            def merge_texture_data(base: dict, override: dict) -> dict:
-                """Deep-merge two texture data dicts. Keys in override take precedence."""
-                merged = dict(base)
-                for key, value in override.items():
-                    if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
-                        merged[key] = {**merged[key], **value}
-                    else:
-                        merged[key] = value
-                return merged
+        # Load first texture file to start
+        combined_data = load_texture_data(input_files[0])
 
-            # Load first texture file to start
-            combined_data = load_texture_data(input_files[0])
+        # Merge additional files: left-most input takes precedence
+        for input_file in input_files[1:]:
+            additional_data = load_texture_data(input_file)
+            # base=additional (lower priority), override=combined (higher priority)
+            combined_data = merge_texture_data(additional_data, combined_data)
 
-            # Merge additional files: left-most input takes precedence
-            for input_file in input_files[1:]:
-                additional_data = load_texture_data(input_file)
-                # base=additional (lower priority), override=combined (higher priority)
-                combined_data = merge_texture_data(additional_data, combined_data)
+        # Write output
+        with open(output_path, "w", encoding="utf8") as f:
+            json.dump(combined_data, f, indent=4)
 
-            # Write output
-            with open(output_path, "w", encoding="utf8") as f:
-                json.dump(combined_data, f, indent=4)
-
-            if args.verbose:
-                print(f"Successfully wrote texture data to {output_path}")
-        except Exception as e:
-            print(f"Error: {e}", file=sys.stderr)
-            sys.exit(1)
+        if args.verbose:
+            print(f"Successfully wrote texture data to {output_path}")
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_schematic(args: argparse.Namespace) -> None:
@@ -167,12 +164,11 @@ def cmd_schematic(args: argparse.Namespace) -> None:
 
     try:
         # Load schematic
-        with alive_bar(bar="bubbles", spinner="wait", disable=not args.verbose) as bar:
-            if input_file.suffix in (".litematic", ".litematica"):
-                schematic_data = Resolve(str(input_file))
-            else:
-                with open(input_file, "r", encoding="utf8") as f:
-                    schematic_data = json.load(f)
+        if input_file.suffix in (".litematic", ".litematica"):
+            schematic_data = Resolve(str(input_file), show_progress=True)
+        else:
+            with open(input_file, "r", encoding="utf8") as f:
+                schematic_data = json.load(f)
 
         # Convert to output format
         if output_ext == ".json":
@@ -193,7 +189,7 @@ def cmd_schematic(args: argparse.Namespace) -> None:
             # LitimaticaToObj expects a directory for `output`, not a file path.
             # It produces a zip archive containing the .obj, .mtl, and texture files.
             output_dir = str(output_path.parent)
-            result = LitimaticaToObj(schematic_data, str(texture_path), output_dir)
+            result = LitimaticaToObj(schematic_data, str(texture_path), output_dir, show_progress=True)
             # Rename the generated zip to match the user's desired output name
             generated_zip = str(result)
             desired_zip = str(output_path.with_suffix(".zip"))
