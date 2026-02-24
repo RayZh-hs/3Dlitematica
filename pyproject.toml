@@ -63,8 +63,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
 ]
 dependencies = [
-    "alive_progress",
-    "click"
+    "alive_progress"
 ]
 dynamic = ["version"]
 
@@ -72,7 +71,7 @@ dynamic = ["version"]
 Repository = "https://github.com/MCRTD/3Dlitematica.git"
 
 [project.scripts]
-3dLitematica = "t3dlitematica.__main__:cli"
+3dLitematica = "t3dlitematica.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

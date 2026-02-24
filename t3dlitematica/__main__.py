@@ -1,90 +1,262 @@
-import os
-from pathlib import Path
-import click
+"""
+3dLitematica - A tool to transform Litematica to 3D Obj
+"""
+
+import argparse
 import json
+import os
+import sys
+from pathlib import Path
+from typing import Optional
+
 from alive_progress import alive_bar
+
+from . import __version__
 from .litematicadecoder import Resolve
 from .objbuilder import LitimaticaToObj
 from .texturepackexport import convert_texturepack
 
 
-class Litematica(click.ParamType):
-    name = "litematica"
+def validate_file_exists(filepath: str, file_type: Optional[str] = None) -> Path:
+    """Validate that a file exists."""
+    if not os.path.exists(filepath):
+        raise argparse.ArgumentTypeError(f"{filepath} does not exist.")
 
-    def convert(self, value, param, ctx):
-        if not os.path.exists(value):
-            self.fail(f"{value} does not exist.")
-        if not value.endswith(".litematic"):
-            self.fail(f"{value} is not a litematica file.")
-        return value
+    if file_type == "litematic" and not filepath.endswith(".litematic"):
+        raise argparse.ArgumentTypeError(f"{filepath} is not a litematica file.")
+    elif file_type == "json" and not filepath.endswith(".json"):
+        raise argparse.ArgumentTypeError(f"{filepath} is not a JSON file.")
+    elif file_type == "litematic_or_json":
+        if not (filepath.endswith(".litematic") or filepath.endswith(".json")):
+            raise argparse.ArgumentTypeError(
+                f"{filepath} is not a litematica or JSON file."
+            )
+    elif file_type == "zippack" and not (
+        filepath.endswith(".zip") or filepath.endswith(".json")
+    ):
+        raise argparse.ArgumentTypeError(f"{filepath} is not a zip or JSON file.")
 
-
-class LitematicaOrJson(click.ParamType):
-    name = "LitematicaOrJson"
-
-    def convert(self, value, param, ctx):
-        if not os.path.exists(value):
-            self.fail(f"{value} does not exist.")
-        if not value.endswith(".litematic") and not value.endswith(".json"):
-            self.fail(f"{value} is not a litematica or json file.")
-        return value
-
-
-@click.group()
-@click.option("--debug", default=False)
-def cli(debug):
-    if debug:
-        click.echo("Debug mode is 'on' ")
+    return Path(filepath).absolute()
 
 
-@cli.command()
-@click.argument("litematica", type=Litematica())
-@click.option("-o", "--output", "output", default="./", help="Output file path")
-@click.option("-f", "--filename", "filename", default="output.json", help="Output file name")
-def Decode(litematica, output, filename):
-    """
-    Decode a litematica file to json file
-    """
-    path = Path(output).absolute()
-    with alive_bar(bar="bubbles", spinner="wait"):
-        data = Resolve(litematica)
-    with open(os.path.join(path,filename), "w", encoding="utf8") as f:
-        json.dump(data, f, indent=4)
+def validate_litematic(filepath: str) -> Path:
+    """Validate litematic file."""
+    return validate_file_exists(filepath, "litematic")
 
 
-@cli.command()
-@click.argument("json_or_litematica", type=LitematicaOrJson())
-@click.argument("texturefolder", type=click.Path(exists=True))
-@click.option("-o", "--output", "output", default="./", help="Output file path")
-def Obj(json_or_litematica, texturefolder, output):
-    """
-    Convert a litematica file to obj file
-    """
-    json_or_litematica = Path(json_or_litematica).absolute()
-    TextureFolder = Path(texturefolder).absolute()
-    output = Path(output).absolute()
-    with alive_bar(bar="bubbles", spinner="wait"):
-        if str(json_or_litematica).endswith(".litematic"):
-            litematica = Resolve(json_or_litematica)
-        else:
-            print(json_or_litematica)
-            with open(json_or_litematica, "r", encoding="utf8") as f:
-                litematica = json.load(f)
-        LitimaticaToObj(litematica, TextureFolder, output)
+def validate_litematic_or_json(filepath: str) -> Path:
+    """Validate litematic or JSON file."""
+    return validate_file_exists(filepath, "litematic_or_json")
 
 
-@cli.command()
-@click.argument("texturepack", type=click.Path(exists=True))
-@click.option("-o", "--output", "output", default="./temp", help="Output file path")
-def Texture(texturepack, output):
-    """
-    Convert texture pack for 3d litematica
-    """
-    texturepack = Path(texturepack).absolute()
-    output = Path(output).absolute()
-    with alive_bar(bar="bubbles", spinner="wait"):
-        convert_texturepack(texturepack, output)
+def validate_zippack_or_json(filepath: str) -> Path:
+    """Validate zip or JSON file for texture packs."""
+    return validate_file_exists(filepath, "zippack")
+
+
+def validate_directory(dirpath: str) -> Path:
+    """Validate that a directory exists."""
+    if not os.path.isdir(dirpath):
+        raise argparse.ArgumentTypeError(f"{dirpath} is not a directory or does not exist.")
+    return Path(dirpath).absolute()
+
+
+def cmd_texture(args: argparse.Namespace) -> None:
+    """Process texture pack conversion."""
+    if not args.input:
+        print("Error: At least one input file is required for texture mode.", file=sys.stderr)
+        sys.exit(1)
+
+    # Validate input files
+    input_files = []
+    for input_file in args.input:
+        try:
+            validated = validate_zippack_or_json(input_file)
+            input_files.append(validated)
+        except argparse.ArgumentTypeError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    # Validate output file
+    if not args.output.endswith(".json"):
+        print("Error: Output file must be a JSON file.", file=sys.stderr)
+        sys.exit(1)
+
+    output_path = Path(args.output).absolute()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if args.verbose:
+        print(f"Converting {len(input_files)} texture pack(s) to JSON...")
+        for input_file in input_files:
+            print(f"  - {input_file}")
+        print(f"Output: {output_path}")
+
+    # Process texture packs
+    with alive_bar(bar="bubbles", spinner="wait", disable=not args.verbose) as bar:
+        try:
+            # Load first texture file to start
+            if input_files[0].suffix == ".zip":
+                convert_texturepack(input_files[0], output_path.parent / "temp_textures")
+            else:
+                with open(input_files[0], "r", encoding="utf8") as f:
+                    combined_data = json.load(f)
+
+            # Merge additional files
+            for input_file in input_files[1:]:
+                if input_file.suffix == ".json":
+                    with open(input_file, "r", encoding="utf8") as f:
+                        additional_data = json.load(f)
+                        # Merge: left file takes precedence
+                        if isinstance(combined_data, dict) and isinstance(additional_data, dict):
+                            combined_data = {**additional_data, **combined_data}
+
+            # Write output
+            with open(output_path, "w", encoding="utf8") as f:
+                json.dump(combined_data, f, indent=4)
+
+            if args.verbose:
+                print(f"Successfully wrote texture data to {output_path}")
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+
+
+def cmd_schematic(args: argparse.Namespace) -> None:
+    """Process schematic conversion."""
+    try:
+        input_file = validate_litematic_or_json(args.input)
+    except argparse.ArgumentTypeError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    output_path = Path(args.output).absolute()
+    output_ext = output_path.suffix.lower()
+
+    # Validate output format
+    if output_ext not in [".json", ".obj"]:
+        print("Error: Output file must have .json or .obj extension.", file=sys.stderr)
+        sys.exit(1)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if args.verbose:
+        print(f"Converting schematic: {input_file}")
+        print(f"Output format: {output_ext[1:]}")
+        if args.texture:
+            print(f"Using texture: {args.texture}")
+
+    try:
+        # Load schematic
+        with alive_bar(bar="bubbles", spinner="wait", disable=not args.verbose) as bar:
+            if input_file.suffix == ".litematic":
+                schematic_data = Resolve(str(input_file))
+            else:
+                with open(input_file, "r", encoding="utf8") as f:
+                    schematic_data = json.load(f)
+
+        # Convert to output format
+        if output_ext == ".json":
+            with open(output_path, "w", encoding="utf8") as f:
+                json.dump(schematic_data, f, indent=4)
+            if args.verbose:
+                print(f"Successfully wrote JSON to {output_path}")
+        elif output_ext == ".obj":
+            if not args.texture:
+                print("Error: Texture file required for OBJ output (-t/--texture).", file=sys.stderr)
+                sys.exit(1)
+            try:
+                texture_path = validate_litematic_or_json(args.texture)
+            except argparse.ArgumentTypeError as e:
+                print(f"Error: {e}", file=sys.stderr)
+                sys.exit(1)
+
+            LitimaticaToObj(schematic_data, texture_path, output_path)
+            if args.verbose:
+                print(f"Successfully wrote OBJ to {output_path}")
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def main() -> None:
+    """Main entry point for the CLI."""
+    parser = argparse.ArgumentParser(
+        prog="3dLitematica",
+        description="A tool to transform Litematica schematics to 3D OBJ files and process texture packs.",
+    )
+
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
+
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output.",
+    )
+
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    subparsers.required = True
+
+    # Texture subcommand
+    texture_parser = subparsers.add_parser(
+        "texture",
+        help="Convert texture packs to JSON format.",
+    )
+    texture_parser.add_argument(
+        "-i",
+        "--input",
+        nargs="+",
+        required=True,
+        help="Input texture pack ZIP file(s) or JSON file(s). Left-most file takes precedence.",
+    )
+    texture_parser.add_argument(
+        "-o",
+        "--output",
+        required=True,
+        help="Output JSON file path.",
+    )
+    texture_parser.set_defaults(func=cmd_texture)
+
+    # Schematic subcommand
+    schematic_parser = subparsers.add_parser(
+        "schematic",
+        help="Convert Litematica schematics to JSON or OBJ format.",
+    )
+    schematic_parser.add_argument(
+        "-i",
+        "--input",
+        required=True,
+        help="Input schematic file (.litematic or .json).",
+    )
+    schematic_parser.add_argument(
+        "-o",
+        "--output",
+        required=True,
+        help="Output file (.json or .obj).",
+    )
+    schematic_parser.add_argument(
+        "-t",
+        "--texture",
+        help="Texture JSON file (required for OBJ output).",
+    )
+    schematic_parser.set_defaults(func=cmd_schematic)
+
+    # Parse arguments
+    args = parser.parse_args()
+
+    # Execute the appropriate command
+    try:
+        args.func(args)
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user.", file=sys.stderr)
+        sys.exit(130)
+    except Exception as e:
+        print(f"Unexpected error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    cli()
+    main()

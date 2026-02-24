@@ -1,2 +1,1 @@
 alive_progress
-click
