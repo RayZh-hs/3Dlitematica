@@ -17,17 +17,22 @@ from .objbuilder import LitimaticaToObj
 from .texturepackexport import convert_texturepack
 
 
+def is_litematic_file(filepath: str) -> bool:
+    """Check if the file is a litematic file based on its extension."""
+    return filepath.endswith(".litematic") or filepath.endswith(".litematica") or filepath.endswith(".schematic") or filepath.endswith(".schem")
+
+
 def validate_file_exists(filepath: str, file_type: Optional[str] = None) -> Path:
     """Validate that a file exists."""
     if not os.path.exists(filepath):
         raise argparse.ArgumentTypeError(f"{filepath} does not exist.")
 
-    if file_type == "litematic" and not filepath.endswith(".litematic"):
+    if file_type == "litematic" and not is_litematic_file(filepath):
         raise argparse.ArgumentTypeError(f"{filepath} is not a litematica file.")
     elif file_type == "json" and not filepath.endswith(".json"):
         raise argparse.ArgumentTypeError(f"{filepath} is not a JSON file.")
     elif file_type == "litematic_or_json":
-        if not (filepath.endswith(".litematic") or filepath.endswith(".json")):
+        if not (is_litematic_file(filepath) or filepath.endswith(".json")):
             raise argparse.ArgumentTypeError(
                 f"{filepath} is not a litematica or JSON file."
             )
@@ -163,7 +168,7 @@ def cmd_schematic(args: argparse.Namespace) -> None:
     try:
         # Load schematic
         with alive_bar(bar="bubbles", spinner="wait", disable=not args.verbose) as bar:
-            if input_file.suffix == ".litematic":
+            if input_file.suffix in (".litematic", ".litematica"):
                 schematic_data = Resolve(str(input_file))
             else:
                 with open(input_file, "r", encoding="utf8") as f:
@@ -244,7 +249,7 @@ def main() -> None:
         "-i",
         "--input",
         required=True,
-        help="Input schematic file (.litematic or .json).",
+        help="Input schematic file (.litematic, .litematica, or .json).",
     )
     schematic_parser.add_argument(
         "-o",
