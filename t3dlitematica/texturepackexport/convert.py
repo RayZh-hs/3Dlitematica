@@ -34,6 +34,8 @@ class convert_texturepack:
     def start(self) -> None:
         sources = []
         for i in os.listdir(os.path.join(self.mainpath, "atlases")):
+            if not i.endswith(".json"):
+                continue
             if i.split(".")[0] in self.noneedfind:
                 continue
             with open(os.path.join(self.mainpath, "atlases", i), "r", encoding="utf8") as f:

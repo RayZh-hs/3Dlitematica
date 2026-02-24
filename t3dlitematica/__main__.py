@@ -96,7 +96,10 @@ def cmd_texture(args: argparse.Namespace) -> None:
         try:
             # Load first texture file to start
             if input_files[0].suffix == ".zip":
-                convert_texturepack(input_files[0], output_path.parent / "temp_textures")
+                temp_dir = output_path.parent / "temp_textures"
+                convert_texturepack(input_files[0], temp_dir)
+                with open(temp_dir / "output.json", "r", encoding="utf8") as f:
+                    combined_data = json.load(f)
             else:
                 with open(input_files[0], "r", encoding="utf8") as f:
                     combined_data = json.load(f)
