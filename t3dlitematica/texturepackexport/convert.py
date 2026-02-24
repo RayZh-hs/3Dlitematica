@@ -50,7 +50,10 @@ class convert_texturepack:
                 needcopy.add(i["resource"].split("/")[0])
 
         def load_model(path:str) -> None:
-            with open(os.path.join(self.mainpath, "models", path), "r", encoding="utf8") as f:
+            model_file = os.path.join(self.mainpath, "models", path)
+            if not os.path.exists(model_file):
+                return
+            with open(model_file, "r", encoding="utf8") as f:
                 blockmodel = f.read()
                 tempload = json.loads(blockmodel)
             blockmodel = blockmodel.replace("minecraft:", "")
@@ -67,7 +70,10 @@ class convert_texturepack:
                 self.blocksdata["models"][path.split("/")[-1].split(".")[0]] = blockmodel
 
         for i in os.listdir(os.path.join(self.mainpath, "blockstates")):
-            with open(os.path.join(self.mainpath, "blockstates", i), "r", encoding="utf8") as f:
+            blockstate_file = os.path.join(self.mainpath, "blockstates", i)
+            if not os.path.exists(blockstate_file):
+                continue
+            with open(blockstate_file, "r", encoding="utf8") as f:
                 blockstates = json.load(f)
             if "variants" in blockstates:
                 for variants in blockstates["variants"]:
@@ -96,7 +102,10 @@ class convert_texturepack:
         if os.path.exists(os.path.join(self.output,"textures")):
             shutil.rmtree(os.path.join(self.output,"textures"))
         for i in needcopy:
-            shutil.copytree(os.path.join(self.mainpath, "textures", i), os.path.join(self.output, "textures", i))
+            src = os.path.join(self.mainpath, "textures", i)
+            if not os.path.exists(src):
+                continue
+            shutil.copytree(src, os.path.join(self.output, "textures", i))
 
 
 
