@@ -66,7 +66,11 @@ class Enity:
         self.rotate = []
         self.element = None
         self.objdata = {"blockname": self.name, "v": [], "vt": [], "f": [], "textures": []}
-        self.texturepath = os.path.join(texturepath, "output.json")
+        # texturepath may be a JSON file directly or a directory containing output.json
+        if os.path.isfile(texturepath):
+            self.texturepath = texturepath
+        else:
+            self.texturepath = os.path.join(texturepath, "output.json")
         self.parse()
         self.merge()
 
@@ -181,6 +185,8 @@ class Enity:
                 self.element = model["elements"]
 
         if not isparent:
+            if self.element is None:
+                return
             self.enitys.append(Build_enity(self, code,self.element))
 
 
@@ -204,6 +210,8 @@ class Build_enity:
         self.start()
 
     def start(self):
+        if not self.element:
+            return
         for i in self.element:
             self.build_element(i)
         alrrote = []

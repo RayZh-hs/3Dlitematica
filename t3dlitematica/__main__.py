@@ -190,9 +190,19 @@ def cmd_schematic(args: argparse.Namespace) -> None:
                 print(f"Error: {e}", file=sys.stderr)
                 sys.exit(1)
 
-            LitimaticaToObj(schematic_data, texture_path, output_path)
+            # LitimaticaToObj expects a directory for `output`, not a file path.
+            # It produces a zip archive containing the .obj, .mtl, and texture files.
+            output_dir = str(output_path.parent)
+            result = LitimaticaToObj(schematic_data, str(texture_path), output_dir)
+            # Rename the generated zip to match the user's desired output name
+            generated_zip = str(result)
+            desired_zip = str(output_path.with_suffix(".zip"))
+            if os.path.abspath(generated_zip) != os.path.abspath(desired_zip):
+                if os.path.exists(desired_zip):
+                    os.remove(desired_zip)
+                os.rename(generated_zip, desired_zip)
             if args.verbose:
-                print(f"Successfully wrote OBJ to {output_path}")
+                print(f"Successfully wrote OBJ archive to {desired_zip}")
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
