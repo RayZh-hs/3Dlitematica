@@ -94,24 +94,36 @@ def cmd_texture(args: argparse.Namespace) -> None:
     # Process texture packs
     with alive_bar(bar="bubbles", spinner="wait", disable=not args.verbose) as bar:
         try:
-            # Load first texture file to start
-            if input_files[0].suffix == ".zip":
-                temp_dir = output_path.parent / "temp_textures"
-                convert_texturepack(input_files[0], temp_dir)
-                with open(temp_dir / "output.json", "r", encoding="utf8") as f:
-                    combined_data = json.load(f)
-            else:
-                with open(input_files[0], "r", encoding="utf8") as f:
-                    combined_data = json.load(f)
+            temp_dir = output_path.parent / "temp_textures"
 
-            # Merge additional files
-            for input_file in input_files[1:]:
-                if input_file.suffix == ".json":
+            def load_texture_data(input_file: Path) -> dict:
+                """Load texture data from a .json or .zip file."""
+                if input_file.suffix == ".zip":
+                    convert_texturepack(input_file, temp_dir)
+                    with open(temp_dir / "output.json", "r", encoding="utf8") as f:
+                        return json.load(f)
+                else:
                     with open(input_file, "r", encoding="utf8") as f:
-                        additional_data = json.load(f)
-                        # Merge: left file takes precedence
-                        if isinstance(combined_data, dict) and isinstance(additional_data, dict):
-                            combined_data = {**additional_data, **combined_data}
+                        return json.load(f)
+
+            def merge_texture_data(base: dict, override: dict) -> dict:
+                """Deep-merge two texture data dicts. Keys in override take precedence."""
+                merged = dict(base)
+                for key, value in override.items():
+                    if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+                        merged[key] = {**merged[key], **value}
+                    else:
+                        merged[key] = value
+                return merged
+
+            # Load first texture file to start
+            combined_data = load_texture_data(input_files[0])
+
+            # Merge additional files: left-most input takes precedence
+            for input_file in input_files[1:]:
+                additional_data = load_texture_data(input_file)
+                # base=additional (lower priority), override=combined (higher priority)
+                combined_data = merge_texture_data(additional_data, combined_data)
 
             # Write output
             with open(output_path, "w", encoding="utf8") as f:
