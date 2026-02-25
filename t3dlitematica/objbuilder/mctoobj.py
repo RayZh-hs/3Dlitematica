@@ -1,3 +1,4 @@
+import copy
 import json
 import math
 import os
@@ -52,7 +53,7 @@ from typing import Callable, List, Union
 
 
 class Enity:
-    def __init__(self, x:float, y:float, z:float, blockdata:dict,texturepath:str) -> None:
+    def __init__(self, x:float, y:float, z:float, blockdata:dict, texture_data:dict) -> None:
         self.blockdata = blockdata
         self.name = blockdata["Name"].replace("minecraft:", "")
         self.x = x
@@ -66,11 +67,7 @@ class Enity:
         self.rotate = []
         self.element = None
         self.objdata = {"blockname": self.name, "v": [], "vt": [], "f": [], "textures": []}
-        # texturepath may be a JSON file directly or a directory containing output.json
-        if os.path.isfile(texturepath):
-            self.texturepath = texturepath
-        else:
-            self.texturepath = os.path.join(texturepath, "output.json")
+        self.texture_data = texture_data
         self.parse()
         self.merge()
 
@@ -89,12 +86,7 @@ class Enity:
             self.objdata["textures"].extend(i.objdata["textures"])
 
     def parse(self) -> None:
-        with open(
-            self.texturepath,
-            "r",
-            encoding="utf8",
-        ) as f:
-            self.thisdata = json.load(f)[self.name]
+        self.thisdata = self.texture_data[self.name]
         if "variants" in self.thisdata:
             for i in self.thisdata["variants"]:
                 if i != "":
@@ -169,20 +161,13 @@ class Enity:
                 code += 1
 
     def load_model(self, modelname:str, code=None,isparent=False) -> None:
-        with open(
-            self.texturepath,
-            "r",
-            encoding="utf8",
-        ) as f:
-            model = json.load(f)["models"][modelname]
-            if "parent" in model:
-                self.load_model(model["parent"].split("/")[-1], code,True)
-            # if isparent:
-            #     self.parents[modelname] = model
-            if "textures" in model:
-                self.textures.update(model["textures"])
-            if "elements" in model:
-                self.element = model["elements"]
+        model = self.texture_data["models"][modelname]
+        if "parent" in model:
+            self.load_model(model["parent"].split("/")[-1], code,True)
+        if "textures" in model:
+            self.textures.update(model["textures"])
+        if "elements" in model:
+            self.element = copy.deepcopy(model["elements"])
 
         if not isparent:
             if self.element is None:

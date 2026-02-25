@@ -11,7 +11,6 @@ except PackageNotFoundError:
 
 from t3dlitematica.litematicadecoder import Resolve
 from t3dlitematica.objbuilder import LitimaticaToObj
-from t3dlitematica.texturepackexport import convert_texturepack
-from t3dlitematica.texturepackexport import multiload
+from t3dlitematica.texturepackexport import TextureCacheBuilder
 
-__all__ = ["Resolve", "LitimaticaToObj", "convert_texturepack", "multiload"]
+__all__ = ["Resolve", "LitimaticaToObj", "TextureCacheBuilder"]

@@ -1,3 +1,4 @@
+import copy
 import json
 import sys
 import traceback
@@ -34,12 +35,59 @@ class Objhandel:
         self.show_progress = show_progress
         self.TextureFolder = TextureFolder
         self.outputfolder = outputfolder
+        self._texture_data = self._load_texture_data()
+        self._block_cache = {}
         self.main(data, size)
         shutil.make_archive(os.path.join(self.outputfolder, self.name), "zip", self.tempfolder)
         shutil.rmtree(self.tempfolder)
 
     def __str__(self) -> str:
         return str(os.path.join(self.outputfolder, self.name) + ".zip")
+
+    def _load_texture_data(self) -> dict:
+        """Load texture data once from the cache directory."""
+        if os.path.isfile(self.TextureFolder):
+            cache_json = self.TextureFolder
+        elif os.path.isfile(os.path.join(self.TextureFolder, "textures.json")):
+            cache_json = os.path.join(self.TextureFolder, "textures.json")
+        elif os.path.isfile(os.path.join(self.TextureFolder, "output.json")):
+            cache_json = os.path.join(self.TextureFolder, "output.json")
+        else:
+            raise FileNotFoundError(f"No texture data found in {self.TextureFolder}")
+        with open(cache_json, "r", encoding="utf8") as f:
+            return json.load(f)
+
+    def _block_key(self, block_data: dict) -> tuple:
+        """Create a hashable cache key from block data (Name + Properties)."""
+        name = block_data["Name"]
+        props = block_data.get("Properties", {})
+        return (name, tuple(sorted(props.items())))
+
+    def _build_cached_block(self, x: float, y: float, z: float, block_data: dict) -> None:
+        """Build a block using cached entity data when possible.
+
+        For each unique (Name, Properties) combination, the entity is resolved
+        once at the origin and the resulting geometry is cached. Subsequent
+        placements reuse the cache by translating the vertices.
+        """
+        key = self._block_key(block_data)
+        if key not in self._block_cache:
+            entity = Enity(0, 0, 0, block_data, self._texture_data)
+            if entity.objdata["v"] == []:
+                self._block_cache[key] = None
+                return
+            self._block_cache[key] = entity.objdata
+
+        cached = self._block_cache[key]
+        if cached is None:
+            return
+
+        objdata = copy.deepcopy(cached)
+        for v in objdata["v"]:
+            v[0] += x
+            v[1] += y
+            v[2] += z
+        self.tmpdata[(x, y, z)] = objdata
 
     def main(self, data, size):
         data = list(reversed(data))
@@ -57,7 +105,7 @@ class Objhandel:
                                 pass
                             else:
                                 try:
-                                    self.addEnity(Enity(i / 10, j / 10, k / 10, data[count], self.TextureFolder))
+                                    self._build_cached_block(i / 10, j / 10, k / 10, data[count])
                                 except Exception as e:
                                     error_class = e.__class__.__name__
                                     detail = e.args[0]
@@ -84,7 +132,7 @@ class Objhandel:
                             pass
                         else:
                             try:
-                                self.addEnity(Enity(i / 10, j / 10, k / 10, data[count], self.TextureFolder))
+                                self._build_cached_block(i / 10, j / 10, k / 10, data[count])
                             except Exception as e:
                                 error_class = e.__class__.__name__
                                 detail = e.args[0]
@@ -192,7 +240,7 @@ class Objhandel:
             f.write(temp)
 
         oneblock = ""
-        for blocks in tqdm(self.tmpdata, desc="Writing OBJ", unit="block", disable=not self.show_progress):
+        for blocks in self.tmpdata:
             for v in self.tmpdata[blocks]["v"]:
                 if self.vtof.get((v[0], v[1], v[2])) == None:
                     oneblock += "v " + str(v[0]) + " " + str(v[1]) + " " + str(v[2]) + "\n"
